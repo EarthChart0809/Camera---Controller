@@ -84,7 +84,7 @@ def switch_camera(current_camera_var, canvas1, canvas2):
         canvas1.pack(side="left")  # 1番目のカメラを表示
         print("Switched to Camera 1")
 
-def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2):
+def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window):
     if event.keysym == 'q':
         window.quit()
     elif event.char.isdigit():  # 数字キーが押された場合
@@ -94,49 +94,54 @@ def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, can
     elif event.keysym == 'c':  # 'c'キーでカメラを切り替える
         switch_camera(current_camera_var, canvas1, canvas2)
 
-# メインウィンドウの作成
-window = tkinter.Tk()
-window.title("カメラ映像表示")
+def main():
+  # メインウィンドウの作成
+  window = tkinter.Tk()
+  window.title("カメラ映像表示")
 
-# 2つのキャンバスを作成（それぞれのカメラ用）
-canvas1 = tkinter.Canvas(window, width=640, height=480)
-canvas1.pack(side="left")
+  # 2つのキャンバスを作成（それぞれのカメラ用）
+  canvas1 = tkinter.Canvas(window, width=640, height=480)
+  canvas1.pack(side="left")
 
-canvas2 = tkinter.Canvas(window, width=640, height=480)
-canvas2.pack_forget()  # 初期状態では2番目のカメラを非表示にする
+  canvas2 = tkinter.Canvas(window, width=640, height=480)
+  canvas2.pack_forget()  # 初期状態では2番目のカメラを非表示にする
 
-# 画像参照を保持する変数を作成（それぞれのカメラ用）
-photo_var1 = [None]
-photo_var2 = [None]
+  # 画像参照を保持する変数を作成（それぞれのカメラ用）
+  photo_var1 = [None]
+  photo_var2 = [None]
 
-# ズーム倍率を保持する変数とロック
-zoom_factor = [1]  # リストでズーム倍率を保持
-zoom_lock = threading.Lock()
+  # ズーム倍率を保持する変数とロック
+  zoom_factor = [1]  # リストでズーム倍率を保持
+  zoom_lock = threading.Lock()
 
-# 現在表示しているカメラを保持する変数
-current_camera_var = [1]  # 初期状態ではカメラ1
+  # 現在表示しているカメラを保持する変数
+  current_camera_var = [1]  # 初期状態ではカメラ1
 
-SERVER_IP = "172.20.10.2"  # ★ラズパイのIPアドレスを指定してください
-SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
+  SERVER_IP = "172.20.10.2"  # ★ラズパイのIPアドレスを指定してください
+  SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
 
-# ソケット接続の確立
-client1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client1.connect((SERVER_IP, SERVER_PORT))
+  # ソケット接続の確立
+  client1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client1.connect((SERVER_IP, SERVER_PORT))
 
-client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client2.connect((SERVER_IP, SERVER_PORT))
+  client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client2.connect((SERVER_IP, SERVER_PORT))
 
-# qキーでプログラムを終了するためのイベントバインド
-window.bind('<KeyPress>', lambda event: on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2))
+  # qキーでプログラムを終了するためのイベントバインド
+  window.bind('<KeyPress>', lambda event: on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2,window))
 
-# フレームの更新ループを実行するスレッドを開始（それぞれのカメラ用）
-thread1 = threading.Thread(target=update_loop, args=(client1, canvas1, photo_var1, zoom_factor, zoom_lock))
-thread2 = threading.Thread(target=update_loop, args=(client2, canvas2, photo_var2, zoom_factor, zoom_lock))
+  # フレームの更新ループを実行するスレッドを開始（それぞれのカメラ用）
+  thread1 = threading.Thread(target=update_loop, args=(client1, canvas1, photo_var1, zoom_factor, zoom_lock))
+  thread2 = threading.Thread(target=update_loop, args=(client2, canvas2, photo_var2, zoom_factor, zoom_lock))
 
-thread1.daemon = True
-thread2.daemon = True
-thread1.start()
-thread2.start()
+  thread1.daemon = True
+  thread2.daemon = True
+  thread1.start()
+  thread2.start()
 
-# メインのTkinterイベントループを開始
-window.mainloop()
+  # メインのTkinterイベントループを開始
+  window.mainloop()
+
+# スクリプトとして実行された場合に main() を呼び出す
+if __name__ == "__main__":
+    main()
