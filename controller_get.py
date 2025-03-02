@@ -2,6 +2,7 @@ import time
 import pygame
 import socket
 import socketmanager
+
 NUMBEROFBOTTONS = 10
 NUMBEROFSTICKS = 6
 STICK_PLAY = -10
@@ -52,7 +53,10 @@ def getstick(stick_width, stick_vartical, sv, port, j):
         round(j.get_axis(stick_vartical) * STICK_VAULE))
     sendstick[VARTICAL] = int(
         round(j.get_axis(stick_width) * STICK_VAULE))
-    return sendstick
+  else:
+      sendstick[WIDTH] = 0
+      sendstick[VARTICAL] = 0
+  return sendstick
 
 def getbotan(sv, port, j):  # ボタンのデータを受け取ってsendbotanに代入する関数
 
@@ -62,6 +66,7 @@ def getbotan(sv, port, j):  # ボタンのデータを受け取ってsendbotan�
     return botan_value
   except TypeError:
     pass
+  return botan_value
 
 # class controller(self):
 #   def __init__(self):

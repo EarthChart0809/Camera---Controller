@@ -68,7 +68,6 @@ def capture_camera(camera_index, client_socket):
         return
 
     try:
-        with ThreadPoolExecutor(max_workers=4) as executor:
             while True:
                 ret, frame = cap.read()
                 if not ret:
@@ -89,7 +88,19 @@ def capture_camera(camera_index, client_socket):
                     print(f"Error sending frame: {e}")
                     break  # 接続エラー時はループを抜ける
 
-                try:
+                # フレームレートの維持
+                time.sleep(0.05)
+
+    except Exception as e:
+        print(f"Error in camera {camera_index}: {e}")
+    finally:
+        cap.release()
+
+def command_listener():
+  with ThreadPoolExecutor(max_workers=4) as executor: # 最大4つのスレッドを使用
+      while True:
+        # フレームサイズを送信
+              try:
                     client, addr = sv.accept()
                     future = executor.submit(
                         responseToCommand, client, addr, back_port)
@@ -106,16 +117,11 @@ def capture_camera(camera_index, client_socket):
 
                     serialtusin(command_response, ser)
 
-                except Exception as e:
+              except Exception as e:
                     print(f"Error in command processing: {e}")
 
-                # フレームレートの維持
-                time.sleep(0.05)
-
-    except Exception as e:
-        print(f"Error in camera {camera_index}: {e}")
-    finally:
-        cap.release()
+              # フレームレートの維持
+              time.sleep(0.05)
 
 # メイン処理
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -125,25 +131,34 @@ server.listen(2)  # 2つのクライアントを待機
 print("Waiting for connection...")
 
 try:
-    client_socket1, client_address1 = server.accept()
+    client_socket0, client_address1 = server.accept()
     print(f"Connection from: {client_address1} for Camera 0")
 
-    client_socket2, client_address2 = server.accept()
+    client_socket1, client_address2 = server.accept()
     print(f"Connection from: {client_address2} for Camera 1")
 
-    # カメラ処理を別スレッドで実行
-    thread1 = threading.Thread(target=capture_camera, args=(0, client_socket1))
-    thread2 = threading.Thread(target=capture_camera, args=(2, client_socket2))
+    back_client, back_addr = server.accept()
+    print(f"Connection from: {back_addr} for Controller")
 
+    # カメラ処理を別スレッドで実行
+    thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
+    thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+
+    #コントローラー処理を別スレッドで実行
+    thread2 = threading.Thread(target=command_listener)
+
+    thread0.start()
     thread1.start()
     thread2.start()
 
+    thread0.join()
     thread1.join()
     thread2.join()
 
 except KeyboardInterrupt:
     print("Shutting down server.")
 finally:
+    client_socket0.close()
     client_socket1.close()
-    client_socket2.close()
+    back_client.close()
     server.close()
