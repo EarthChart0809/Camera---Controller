@@ -137,8 +137,8 @@ try:
     client_socket1, client_address2 = server.accept()
     print(f"Connection from: {client_address2} for Camera 1")
 
-    back_client, back_addr = server.accept()
-    print(f"Connection from: {back_addr} for Controller")
+    back_client, back_address = server.accept()
+    print(f"Connection from: {back_address} for Controller")
 
     # カメラ処理を別スレッドで実行
     thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))

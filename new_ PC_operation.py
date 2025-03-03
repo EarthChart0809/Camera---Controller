@@ -11,7 +11,6 @@ from pyzbar.pyzbar import decode, ZBarSymbol
 import pygame
 import controller_get as con
 import copy
-import socket
 import socketmanager
 
 NUMBEROFBOTTONS = 10
@@ -112,17 +111,53 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
             print(f"Error in update_loop: {e}")
             break
 
-# カメラの切り替え関数
+def controller_loop(sv,port,j):
+  hat_data = [0] * 2
+  botan_data = [0] * 10
+  Lstick_data = [0] * 2
+  Rstick_data = [0] * 2
+  hat_data_old = [0] * 2
+  botan_data_old = [0] * 10
+  Lstick_data_old = [0] * 2
+  Rstick_data_old = [0] * 2
+
+  # コールバック要求クライアント
+  while True:
+    Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
+    Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
+    hat_data = copy.deepcopy(con.gethat(sv, port, j))
+    events = pygame.event.get()
+    for event in events:
+      if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
+        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+      if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
+        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+    if not hat_data == hat_data_old:
+      con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
+      con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
+      hat_data_old = copy.deepcopy(hat_data)
+    if not Lstick_data == Lstick_data_old:
+      con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
+      con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
+      Lstick_data_old = copy.deepcopy(Lstick_data)
+    if not Rstick_data == Rstick_data_old:
+      con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
+      con.contorollerdata_send(
+          cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
+      Rstick_data_old = copy.deepcopy(Rstick_data)
+    for i in range(NUMBEROFBOTTONS):
+      if not botan_data[i] == botan_data_old[i]:
+        con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
+        botan_data_old = copy.deepcopy(botan_data)
+
 def switch_camera(current_camera_var, canvas1, canvas2):
     if current_camera_var[0] == 1:
         current_camera_var[0] = 2
-        canvas1.pack_forget()  # 現在のカメラを隠す
-        canvas2.pack(side="left")  # 2番目のカメラを表示
+        canvas2.lift()  # 2番目のカメラを前面に表示
         print("Switched to Camera 2")
     else:
         current_camera_var[0] = 1
-        canvas2.pack_forget()  # 現在のカメラを隠す
-        canvas1.pack(side="left")  # 1番目のカメラを表示
+        canvas1.lift()  # 1番目のカメラを前面に表示
         print("Switched to Camera 1")
 
 def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window):
@@ -165,76 +200,46 @@ def main():
 
   SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
   SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
-
-  hat_data = [0] * 2
-  botan_data = [0] * 10
-  Lstick_data = [0] * 2
-  Rstick_data = [0] * 2
-  hat_data_old = [0] * 2
-  botan_data_old = [0] * 10
-  Lstick_data_old = [0] * 2
-  Rstick_data_old = [0] * 2
   
   # 戻り値待ち受け用のサーバ
   port = portcheck("port番号を打ち込んでください")
   back_port = portcheck("返信用のport番号を打ち込んでください")
-  sv = socket.socket(socket.AF_INET)
+  sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   sv.bind((socket.gethostbyname(socket.gethostname()), back_port))
   sv.listen()
+  
+  client_socket, client_address = sv.accept()  # クライアント接続を受け入れる
+  print(f"Connection established with {client_address}")
 
   # ソケット接続の確立
+  client0 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client0.connect((SERVER_IP, SERVER_PORT))
+
   client1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   client1.connect((SERVER_IP, SERVER_PORT))
-
-  client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  client2.connect((SERVER_IP, SERVER_PORT))
 
   # qキーでプログラムを終了するためのイベントバインド
   window.bind('<KeyPress>', lambda event: on_key_press(
       event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window))
 
   # フレームの更新ループを実行するスレッドを開始（それぞれのカメラ用）
+  thread0 = threading.Thread(target=update_loop, args=(
+      client0, canvas1, photo_var1, zoom_factor, zoom_lock))
   thread1 = threading.Thread(target=update_loop, args=(
-      client1, canvas1, photo_var1, zoom_factor, zoom_lock))
-  thread2 = threading.Thread(target=update_loop, args=(
-      client2, canvas2, photo_var2, zoom_factor, zoom_lock))
+      client1, canvas2, photo_var2, zoom_factor, zoom_lock))
 
+  # コントローラーの更新ループを実行するスレッドを開始
+  controller_thread = threading.Thread(target=controller_loop,args=(sv,port,j))
+
+  thread0.daemon = True
   thread1.daemon = True
-  thread2.daemon = True
+  controller_thread.daemon = True
+  thread0.start()
   thread1.start()
-  thread2.start()
+  controller_thread.start()
 
   # メインのTkinterイベントループを開始
   window.mainloop()
-
-  # コールバック要求クライアント
-  while True:
-    Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
-    Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
-    hat_data = copy.deepcopy(con.gethat(sv, port, j))
-    events = pygame.event.get()
-    for event in events:
-      if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-      if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-    if not hat_data == hat_data_old:
-      con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
-      con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
-      hat_data_old = copy.deepcopy(hat_data)
-    if not Lstick_data == Lstick_data_old:
-      con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
-      con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
-      Lstick_data_old = copy.deepcopy(Lstick_data)
-    if not Rstick_data == Rstick_data_old:
-      con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
-      con.contorollerdata_send(
-          cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
-      Rstick_data_old = copy.deepcopy(Rstick_data)
-    for i in range(NUMBEROFBOTTONS):
-      if not botan_data[i] == botan_data_old[i]:
-        con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
-        botan_data_old = copy.deepcopy(botan_data)
 
 # スクリプトとして実行された場合に main() を呼び出す
 if __name__ == "__main__":
