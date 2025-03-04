@@ -6,11 +6,12 @@ import struct
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future
 
-SERVER_IP = '172.20.10.2'
+SERVER_IP = '10.133.7.48'
 SERVER_PORT = 36131
 BUFSIZE = 4096
-data_get = [0] * 4
+data_get: list[Future] = []   # 型をFutureに変更
 data_return = []
 port = int(input("port番号を打ち込んでください: "))
 back_port = int(input("バックポート番号を打ち込んでください: "))
@@ -21,11 +22,10 @@ ser.flush()
 
 # ソケットの設定
 sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sv.bind(("192.168.246.106", port))
+sv.bind(("10.133.7.48", port))
 sv.listen()
 
 z = 0
-start = time.perf_counter()  # 計測開始
 
 def serialtusin(message, ser):
     msg = str(message) + "\n"
@@ -97,40 +97,41 @@ def capture_camera(camera_index, client_socket):
         cap.release()
 
 def command_listener():
-  with ThreadPoolExecutor(max_workers=4) as executor: # 最大4つのスレッドを使用
-      while True:
-        # フレームサイズを送信
-              try:
-                    client, addr = sv.accept()
-                    future = executor.submit(
-                        responseToCommand, client, addr, back_port)
-                    command_response = future.result()
+  global z
+  global data_get
+  while True:
+      with ThreadPoolExecutor(max_workers=4) as executor:  # 最大4つのスレッドを使用
 
-                    end = time.perf_counter()  # 計測終了
-                    elapsed_time = end - start
+        client, addr = sv.accept()
+      # 別スレッドでクライアントに返答
+        data_get[z] = executor.submit(responseToCommand, client, addr, back_port)
+        data_return.append(data_get[z].result())
+      
+#       try:
+        print(data_return)
+        serialtusin(data_return[-1], ser)
 
-                    if command_response and command_response not in ["0", "1"]:
-                        data_return.append([command_response, elapsed_time])
+        if (not data_return[-1][:1] == "0" and not data_return[-1][:1] == "1"):
+          data_return.pop(-1)
+        elif (len(data_return) > 10):
+          data_return.pop(0)
+#       except:
+#            print("error")
 
-                    if len(data_return) > 10:
-                        data_return.pop(0)
+        z += 1
+        if z > 3:
+          z = 0
 
-                    serialtusin(command_response, ser)
+def main():
 
-              except Exception as e:
-                    print(f"Error in command processing: {e}")
+  # メイン処理
+  server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  server.bind((SERVER_IP, SERVER_PORT))
+  server.listen(2)  # 2つのクライアントを待機
 
-              # フレームレートの維持
-              time.sleep(0.05)
+  print("Waiting for connection...")
 
-# メイン処理
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((SERVER_IP, SERVER_PORT))
-server.listen(2)  # 2つのクライアントを待機
-
-print("Waiting for connection...")
-
-try:
+  try:
     client_socket0, client_address1 = server.accept()
     print(f"Connection from: {client_address1} for Camera 0")
 
@@ -155,10 +156,13 @@ try:
     thread1.join()
     thread2.join()
 
-except KeyboardInterrupt:
+  except KeyboardInterrupt:
     print("Shutting down server.")
-finally:
+  finally:
     client_socket0.close()
     client_socket1.close()
     back_client.close()
     server.close()
+
+if __name__ =='__main__':
+  main()

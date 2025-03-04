@@ -40,7 +40,7 @@ def main():
   sv.bind(("192.168.246.106", port))
   sv.listen()
   z = 0
-  start = time.perf_counter()  # 計測開始
+  
   while True:
 
     client, addr = sv.accept()
@@ -48,9 +48,7 @@ def main():
     with ThreadPoolExecutor(max_workers=4) as executor:
       data_get[z] = executor.submit(responseToCommand, client, addr, back_port)
       data_return.append(data_get[z].result())
-      end = time.perf_counter()  # 計測終了
-      data_return[-1].append(end - start)
-      start = end
+      
 #       try:
       print(data_return)
       serialtusin(data_return[-1], ser)
@@ -62,10 +60,10 @@ def main():
 #       except:
 #            print("error")
 
+    z += 1
     if z > 3:
       z = 0
-    else:
-      z += 1
+    
 
 
 if __name__ == "__main__":

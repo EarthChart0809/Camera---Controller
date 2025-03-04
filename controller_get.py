@@ -28,7 +28,7 @@ BOTAN = 4
 VARTICAL = 0
 WIDTH = 1
 HAT_NUMBER = 0
-IP = "192.168.246.106"
+IP = "10.133.7.48"
 
 def contorollerdata_send(cmd, sendc, kind, sv, port):
   command = str(kind) + "," + str(sendc) + "," + str(cmd)
