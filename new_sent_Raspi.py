@@ -99,29 +99,34 @@ def capture_camera(camera_index, client_socket):
 def command_listener():
   global z
   global data_get
-  while True:
-      with ThreadPoolExecutor(max_workers=4) as executor:  # 最大4つのスレッドを使用
 
-        client, addr = sv.accept()
-      # 別スレッドでクライアントに返答
-        data_get[z] = executor.submit(responseToCommand, client, addr, back_port)
-        data_return.append(data_get[z].result())
-      
-#       try:
-        print(data_return)
-        serialtusin(data_return[-1], ser)
+  with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
+      while True:
+          try:
+                client, addr = sv.accept()
+                print(f"Accepted connection from {addr}")
 
-        if (not data_return[-1][:1] == "0" and not data_return[-1][:1] == "1"):
-          data_return.pop(-1)
-        elif (len(data_return) > 10):
-          data_return.pop(0)
-#       except:
-#            print("error")
+                # 別スレッドでクライアントに返答
+                future = executor.submit(
+                    responseToCommand, client, addr, back_port)
+                data_get.append(future)  # 配列の使い方を統一
+                data_return.append(future.result())
 
-        z += 1
-        if z > 3:
-          z = 0
+                print("Received:", data_return)
 
+                serialtusin(data_return[-1], ser)
+
+                if not data_return[-1][:1] in ["0", "1"]:
+                    data_return.pop(-1)
+                elif len(data_return) > 10:
+                    data_return.pop(0)
+
+                z += 1
+                if z > 3:
+                    z = 0
+
+          except Exception as e:
+                print(f"Error in command_listener: {e}")
 def main():
 
   # メイン処理

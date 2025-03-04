@@ -88,6 +88,7 @@ def update_image(data, canvas, photo_var, zoom_factor, zoom_lock):
 # 各カメラの更新ループを実行する関数
 def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
     data = b""
+    print("カメラの受信ループ開始")
     while True:
         try:
             while len(data) < 4:
@@ -98,6 +99,8 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
             data_size = struct.unpack(">L", data[:4])[0]
             data = data[4:]
 
+            print(f"受信データサイズ: {data_size} バイト")
+
             while len(data) < data_size:
                 packet = client.recv(4096)
                 if not packet:
@@ -106,6 +109,7 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
 
             img_data = data[:data_size]
             data = data[data_size:]
+            print(f"画像データを受信: {len(img_data)} バイト")
             update_image(img_data, canvas, photo_var, zoom_factor, zoom_lock)
         except Exception as e:
             print(f"Error in update_loop: {e}")
@@ -121,6 +125,9 @@ def controller_loop(sv,port,j):
   Lstick_data_old = [0] * 2
   Rstick_data_old = [0] * 2
 
+  print("コントローラーループ開始")
+
+
   # コールバック要求クライアント
   while True:
     Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
@@ -132,6 +139,11 @@ def controller_loop(sv,port,j):
         botan_data = copy.deepcopy(con.getbotan(sv, port, j))
       if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
         botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+
+    # **デバッグ用のログ**
+        print(
+            f"取得データ: hat={hat_data}, Lstick={Lstick_data}, Rstick={Rstick_data}, buttons={botan_data}")
+
     if not hat_data == hat_data_old:
       con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
       con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
@@ -234,8 +246,11 @@ def main():
   thread0.daemon = True
   thread1.daemon = True
   controller_thread.daemon = True
+  print("スレッド開始: カメラ1")
   thread0.start()
+  print("スレッド開始: カメラ2")
   thread1.start()
+  print("スレッド開始: コントローラー")
   controller_thread.start()
 
   # メインのTkinterイベントループを開始

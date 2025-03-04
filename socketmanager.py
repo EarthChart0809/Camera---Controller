@@ -20,11 +20,14 @@ def receiveReturn(sv, callback):
 #  callback: サーバーからの返答文字列を受けるコールバック関数
 
 def sendCommand(client, sv, command, callback):
-  msg = command.encode("utf-8")
-  val = client.send(msg)
-  client.close()
-
+  try:
+        msg = command.encode("utf-8")
+        client.sendall(msg)  # send() より sendall() のほうが確実
+  except Exception as e:
+        print(f"Error sending command: {e}")
+  finally:
+        client.close()  # 送信後に適切に閉じる
   # 返答をスレッドで受ける
-  thre = threading.Thread(target=receiveReturn, args=(sv, callback))
+  thre = threading.Thread(target=receiveReturn,args=(sv, callback), daemon=True)
   thre.start()
-  thre.join()
+  # thre.join()
