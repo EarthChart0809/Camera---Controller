@@ -11,7 +11,6 @@ from pyzbar.pyzbar import decode, ZBarSymbol
 import pygame
 import controller_get as con
 import copy
-import socketmanager
 
 NUMBEROFBOTTONS = 10
 NUMBEROFSTICKS = 6
@@ -115,7 +114,12 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
             print(f"Error in update_loop: {e}")
             break
 
-def controller_loop(sv,port,j):
+def controller_loop(sv,port,j,SERVER_IP,SERVER_PORT_CONTROLLER):
+  SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
+  SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
+  client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client2.connect((SERVER_IP, SERVER_PORT_CONTROLLER))
+
   hat_data = [0] * 2
   botan_data = [0] * 10
   Lstick_data = [0] * 2
@@ -212,17 +216,8 @@ def main():
 
   SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
   SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
+  SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
   
-  # 戻り値待ち受け用のサーバ
-  port = portcheck("port番号を打ち込んでください")
-  back_port = portcheck("返信用のport番号を打ち込んでください")
-  sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sv.bind((socket.gethostbyname(socket.gethostname()), back_port))
-  sv.listen()
-  
-  client_socket, client_address = sv.accept()  # クライアント接続を受け入れる
-  print(f"Connection established with {client_address}")
-
   # ソケット接続の確立
   client0 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   client0.connect((SERVER_IP, SERVER_PORT))
@@ -241,7 +236,7 @@ def main():
       client1, canvas2, photo_var2, zoom_factor, zoom_lock))
 
   # コントローラーの更新ループを実行するスレッドを開始
-  controller_thread = threading.Thread(target=controller_loop,args=(sv,port,j))
+  controller_thread = threading.Thread(target=controller_loop,args=(j,SERVER_IP,SERVER_PORT_CONTROLLER))
 
   thread0.daemon = True
   thread1.daemon = True

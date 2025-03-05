@@ -10,20 +10,14 @@ from concurrent.futures import Future
 
 SERVER_IP = '10.133.7.48'
 SERVER_PORT = 36131
+SERVER_PORT_CONTROLLER = 36132
 BUFSIZE = 4096
 data_get: list[Future] = []   # 型をFutureに変更
 data_return = []
-port = int(input("port番号を打ち込んでください: "))
-back_port = int(input("バックポート番号を打ち込んでください: "))
 
 # シリアルポートの初期化
 ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
 ser.flush()
-
-# ソケットの設定
-sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sv.bind(("10.133.7.48", port))
-sv.listen()
 
 z = 0
 
@@ -51,8 +45,6 @@ def responseToCommand(client, addr, back_port):
     except Exception as e:
         print(f"Error handling command: {e}")
         return "ERROR"
-    finally:
-        client.close()
 
 # カメラ処理
 def capture_camera(camera_index, client_socket):
@@ -97,8 +89,9 @@ def capture_camera(camera_index, client_socket):
         cap.release()
 
 def command_listener():
-  global z
-  global data_get
+  sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  sv.bind((SERVER_IP, SERVER_PORT_CONTROLLER))
+  sv.listen()
 
   with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
       while True:
@@ -108,7 +101,7 @@ def command_listener():
 
                 # 別スレッドでクライアントに返答
                 future = executor.submit(
-                    responseToCommand, client, addr, back_port)
+                    responseToCommand, client, addr, SERVER_PORT)
                 data_get.append(future)  # 配列の使い方を統一
                 data_return.append(future.result())
 
@@ -136,38 +129,35 @@ def main():
 
   print("Waiting for connection...")
 
-  try:
-    client_socket0, client_address1 = server.accept()
-    print(f"Connection from: {client_address1} for Camera 0")
 
-    client_socket1, client_address2 = server.accept()
-    print(f"Connection from: {client_address2} for Camera 1")
+  client_socket0, client_address1 = server.accept()
+  print(f"Connection from: {client_address1} for Camera 0")
 
-    back_client, back_address = server.accept()
-    print(f"Connection from: {back_address} for Controller")
+  client_socket1, client_address2 = server.accept()
+  print(f"Connection from: {client_address2} for Camera 1")
 
-    # カメラ処理を別スレッドで実行
-    thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
-    thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+  # カメラ処理を別スレッドで実行
+  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
+  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
 
-    #コントローラー処理を別スレッドで実行
-    thread2 = threading.Thread(target=command_listener)
+  #コントローラー処理を別スレッドで実行
+  thread2 = threading.Thread(target=command_listener)
 
-    thread0.start()
-    thread1.start()
-    thread2.start()
+  thread0.start()
+  thread1.start()
+  thread2.start()
 
-    thread0.join()
-    thread1.join()
-    thread2.join()
+  thread0.join()
+  thread1.join()
+  thread2.join()
 
-  except KeyboardInterrupt:
-    print("Shutting down server.")
-  finally:
-    client_socket0.close()
-    client_socket1.close()
-    back_client.close()
-    server.close()
+  # except KeyboardInterrupt:
+  #   print("Shutting down server.")
+  # finally:
+  #   client_socket0.close()
+  #   client_socket1.close()
+  #   back_client.close()
+  #   server.close()
 
 if __name__ =='__main__':
   main()
