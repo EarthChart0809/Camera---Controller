@@ -22,6 +22,7 @@ ser.flush()
 z = 0
 
 def serialtusin(message, ser):
+    print(f"Sending message to serial: {message}")
     msg = str(message) + "\n"
     ser.write(msg.encode('utf-8'))
     time.sleep(0.01)  # 小休止
@@ -32,13 +33,18 @@ def serialtusin(message, ser):
 # クライアントからのコマンドを処理する関数
 def responseToCommand(client, addr, back_port):
     try:
+        print("Waiting to receive data from client...")
         data = client.recv(1024)
         command = data.decode("utf-8")
+        print(f"Received command: {command}")
 
         # クライアントに返答
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as res:
+            print(f"Connecting to {addr[0]}:{back_port} to send response...")
             res.connect((addr[0], back_port))
             res.sendall("Thank you!".encode("utf-8"))
+            print("Sent response: Thank you!")
+
 
         print(command)
         return command
@@ -129,35 +135,35 @@ def main():
 
   print("Waiting for connection...")
 
+  try:
+    client_socket0, client_address1 = server.accept()
+    print(f"Connection from: {client_address1} for Camera 0")
 
-  client_socket0, client_address1 = server.accept()
-  print(f"Connection from: {client_address1} for Camera 0")
+    client_socket1, client_address2 = server.accept()
+    print(f"Connection from: {client_address2} for Camera 1")
 
-  client_socket1, client_address2 = server.accept()
-  print(f"Connection from: {client_address2} for Camera 1")
+    # カメラ処理を別スレッドで実行
+    thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
+    thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
 
-  # カメラ処理を別スレッドで実行
-  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
-  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+    #コントローラー処理を別スレッドで実行
+    thread2 = threading.Thread(target=command_listener)
 
-  #コントローラー処理を別スレッドで実行
-  thread2 = threading.Thread(target=command_listener)
+    thread0.start()
+    thread1.start()
+    thread2.start()
 
-  thread0.start()
-  thread1.start()
-  thread2.start()
+    thread0.join()
+    thread1.join()
+    thread2.join()
 
-  thread0.join()
-  thread1.join()
-  thread2.join()
+  except KeyboardInterrupt:
+    print("Shutting down server.")
 
-  # except KeyboardInterrupt:
-  #   print("Shutting down server.")
-  # finally:
-  #   client_socket0.close()
-  #   client_socket1.close()
-  #   back_client.close()
-  #   server.close()
+  finally:
+    client_socket0.close()
+    client_socket1.close()
+    server.close()
 
 if __name__ =='__main__':
   main()

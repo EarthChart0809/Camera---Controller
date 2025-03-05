@@ -98,7 +98,7 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
             data_size = struct.unpack(">L", data[:4])[0]
             data = data[4:]
 
-            print(f"受信データサイズ: {data_size} バイト")
+            #print(f"受信データサイズ: {data_size} バイト")
 
             while len(data) < data_size:
                 packet = client.recv(4096)
@@ -108,7 +108,7 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
 
             img_data = data[:data_size]
             data = data[data_size:]
-            print(f"画像データを受信: {len(img_data)} バイト")
+            #print(f"画像データを受信: {len(img_data)} バイト")
             update_image(img_data, canvas, photo_var, zoom_factor, zoom_lock)
         except Exception as e:
             print(f"Error in update_loop: {e}")
@@ -131,49 +131,54 @@ def controller_loop(sv,port,j,SERVER_IP,SERVER_PORT_CONTROLLER):
 
   print("コントローラーループ開始")
 
-
   # コールバック要求クライアント
   while True:
-    Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
-    Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
-    hat_data = copy.deepcopy(con.gethat(sv, port, j))
-    events = pygame.event.get()
-    for event in events:
-      if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-      if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+    try:
+      Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
+      Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
+      hat_data = copy.deepcopy(con.gethat(sv, port, j))
+      events = pygame.event.get()
+      for event in events:
+        if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
+          botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+        if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
+          botan_data = copy.deepcopy(con.getbotan(sv, port, j))
 
     # **デバッグ用のログ**
-        print(
-            f"取得データ: hat={hat_data}, Lstick={Lstick_data}, Rstick={Rstick_data}, buttons={botan_data}")
+      # print(
+      #       f"取得データ: hat={hat_data}, Lstick={Lstick_data}, Rstick={Rstick_data}, buttons={botan_data}")
 
-    if not hat_data == hat_data_old:
-      con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
-      con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
-      hat_data_old = copy.deepcopy(hat_data)
-    if not Lstick_data == Lstick_data_old:
-      con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
-      con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
-      Lstick_data_old = copy.deepcopy(Lstick_data)
-    if not Rstick_data == Rstick_data_old:
-      con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
-      con.contorollerdata_send(
-          cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
-      Rstick_data_old = copy.deepcopy(Rstick_data)
-    for i in range(NUMBEROFBOTTONS):
-      if not botan_data[i] == botan_data_old[i]:
-        con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
-        botan_data_old = copy.deepcopy(botan_data)
+      if not hat_data == hat_data_old:
+        con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
+        con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
+        hat_data_old = copy.deepcopy(hat_data)
+      if not Lstick_data == Lstick_data_old:
+        con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
+        con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
+        Lstick_data_old = copy.deepcopy(Lstick_data)
+      if not Rstick_data == Rstick_data_old:
+        con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
+        con.contorollerdata_send(cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
+        Rstick_data_old = copy.deepcopy(Rstick_data)
+      for i in range(NUMBEROFBOTTONS):
+        if not botan_data[i] == botan_data_old[i]:
+          con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
+          botan_data_old = copy.deepcopy(botan_data)
+    except Exception as e :
+      print(f"Error in controller_loop: {e}")
+      break
+
 
 def switch_camera(current_camera_var, canvas1, canvas2):
     if current_camera_var[0] == 1:
         current_camera_var[0] = 2
-        canvas2.lift()  # 2番目のカメラを前面に表示
+        canvas1.pack_forget()  # 現在のカメラを隠す
+        canvas2.pack(side="left")  # 2番目のカメラを表示
         print("Switched to Camera 2")
     else:
         current_camera_var[0] = 1
-        canvas1.lift()  # 1番目のカメラを前面に表示
+        canvas2.pack_forget()  # 現在のカメラを隠す
+        canvas1.pack(side="left")  # 1番目のカメラを表示
         print("Switched to Camera 1")
 
 def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window):
@@ -236,17 +241,18 @@ def main():
       client1, canvas2, photo_var2, zoom_factor, zoom_lock))
 
   # コントローラーの更新ループを実行するスレッドを開始
-  controller_thread = threading.Thread(target=controller_loop,args=(j,SERVER_IP,SERVER_PORT_CONTROLLER))
+  controller_thread = threading.Thread(target=controller_loop,args=(None,None,j,SERVER_IP,SERVER_PORT_CONTROLLER))
 
   thread0.daemon = True
   thread1.daemon = True
   controller_thread.daemon = True
-  print("スレッド開始: カメラ1")
+  
   thread0.start()
-  print("スレッド開始: カメラ2")
+  print("スレッド開始: カメラ1")
   thread1.start()
-  print("スレッド開始: コントローラー")
+  print("スレッド開始: カメラ2")
   controller_thread.start()
+  print("スレッド開始: コントローラー")
 
   # メインのTkinterイベントループを開始
   window.mainloop()
