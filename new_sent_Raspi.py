@@ -11,6 +11,7 @@ from concurrent.futures import Future
 SERVER_IP = '10.133.7.48'
 SERVER_PORT = 36131
 SERVER_PORT_CONTROLLER = 36132
+SERVER_PORT_SERIAL = 36133
 BUFSIZE = 4096
 data_get: list[Future] = []   # 型をFutureに変更
 data_return = []
@@ -31,7 +32,8 @@ def serialtusin(message, ser):
         print(line)
 
 # クライアントからのコマンドを処理する関数
-def responseToCommand(client, addr, back_port):
+def responseToCommand(client, addr, SERVER_PORT_CONTROLLER):
+    SERVER_PORT_CONTROLLER = 36132
     try:
         print("Waiting to receive data from client...")
         data = client.recv(1024)
@@ -40,8 +42,8 @@ def responseToCommand(client, addr, back_port):
 
         # クライアントに返答
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as res:
-            print(f"Connecting to {addr[0]}:{back_port} to send response...")
-            res.connect((addr[0], back_port))
+            print(f"Connecting to {addr[0]}:{SERVER_PORT_CONTROLLER} to send response...")
+            res.connect((addr[0], SERVER_PORT_CONTROLLER))
             res.sendall("Thank you!".encode("utf-8"))
             print("Sent response: Thank you!")
 
@@ -95,9 +97,10 @@ def capture_camera(camera_index, client_socket):
         cap.release()
 
 def command_listener():
-  sv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sv.bind((SERVER_IP, SERVER_PORT_CONTROLLER))
+  sv = socket.socket(socket.AF_INET)
+  sv.bind((SERVER_IP, SERVER_PORT_SERIAL))
   sv.listen()
+  print(f"コントローラーデータ受信中... ポート: {SERVER_PORT_CONTROLLER}")
 
   with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
       while True:
@@ -107,7 +110,7 @@ def command_listener():
 
                 # 別スレッドでクライアントに返答
                 future = executor.submit(
-                    responseToCommand, client, addr, SERVER_PORT)
+                    responseToCommand, client, addr, SERVER_PORT_CONTROLLER)
                 data_get.append(future)  # 配列の使い方を統一
                 data_return.append(future.result())
 

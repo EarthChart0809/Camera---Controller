@@ -11,6 +11,7 @@ from pyzbar.pyzbar import decode, ZBarSymbol
 import pygame
 import controller_get as con
 import copy
+import time
 
 NUMBEROFBOTTONS = 10
 NUMBEROFSTICKS = 6
@@ -117,13 +118,22 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
 def controller_loop(sv,port,j,SERVER_IP,SERVER_PORT_CONTROLLER):
   SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
   SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
+  port = 36133
   client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  client2.connect((SERVER_IP, SERVER_PORT_CONTROLLER))
 
-  hat_data = [0] * 2
-  botan_data = [0] * 10
-  Lstick_data = [0] * 2
-  Rstick_data = [0] * 2
+   # **接続リトライ**
+  for _ in range(5):  # 最大5回リトライ
+        try:
+            client2.connect((SERVER_IP, SERVER_PORT_CONTROLLER))
+            print("コントローラーループ開始: ラズパイに接続成功")
+            break  # 接続成功ならループを抜ける
+        except ConnectionRefusedError:
+            print("ラズパイのコントローラーサーバーに接続できません。再試行中...")
+            time.sleep(2)
+  else:
+        print("ラズパイのコントローラーサーバーに接続できませんでした。")
+        return  # 接続できなければ終了
+
   hat_data_old = [0] * 2
   botan_data_old = [0] * 10
   Lstick_data_old = [0] * 2
@@ -222,7 +232,7 @@ def main():
   SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
   SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
   SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
-  
+
   # ソケット接続の確立
   client0 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   client0.connect((SERVER_IP, SERVER_PORT))
