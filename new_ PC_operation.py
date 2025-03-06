@@ -99,7 +99,7 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
             data_size = struct.unpack(">L", data[:4])[0]
             data = data[4:]
 
-            #print(f"受信データサイズ: {data_size} バイト")
+            # print(f"受信データサイズ: {data_size} バイト")
 
             while len(data) < data_size:
                 packet = client.recv(4096)
@@ -109,74 +109,11 @@ def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
 
             img_data = data[:data_size]
             data = data[data_size:]
-            #print(f"画像データを受信: {len(img_data)} バイト")
+            # print(f"画像データを受信: {len(img_data)} バイト")
             update_image(img_data, canvas, photo_var, zoom_factor, zoom_lock)
         except Exception as e:
             print(f"Error in update_loop: {e}")
             break
-
-def controller_loop(sv,port,j,SERVER_IP,SERVER_PORT_CONTROLLER):
-  SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
-  SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
-  port = 36133
-  client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-   # **接続リトライ**
-  for _ in range(5):  # 最大5回リトライ
-        try:
-            client2.connect((SERVER_IP, SERVER_PORT_CONTROLLER))
-            print("コントローラーループ開始: ラズパイに接続成功")
-            break  # 接続成功ならループを抜ける
-        except ConnectionRefusedError:
-            print("ラズパイのコントローラーサーバーに接続できません。再試行中...")
-            time.sleep(2)
-  else:
-        print("ラズパイのコントローラーサーバーに接続できませんでした。")
-        return  # 接続できなければ終了
-
-  hat_data_old = [0] * 2
-  botan_data_old = [0] * 10
-  Lstick_data_old = [0] * 2
-  Rstick_data_old = [0] * 2
-
-  print("コントローラーループ開始")
-
-  # コールバック要求クライアント
-  while True:
-    try:
-      Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
-      Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
-      hat_data = copy.deepcopy(con.gethat(sv, port, j))
-      events = pygame.event.get()
-      for event in events:
-        if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
-          botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-        if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
-          botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-
-    # **デバッグ用のログ**
-      # print(
-      #       f"取得データ: hat={hat_data}, Lstick={Lstick_data}, Rstick={Rstick_data}, buttons={botan_data}")
-
-      if not hat_data == hat_data_old:
-        con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
-        con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
-        hat_data_old = copy.deepcopy(hat_data)
-      if not Lstick_data == Lstick_data_old:
-        con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
-        con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
-        Lstick_data_old = copy.deepcopy(Lstick_data)
-      if not Rstick_data == Rstick_data_old:
-        con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
-        con.contorollerdata_send(cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
-        Rstick_data_old = copy.deepcopy(Rstick_data)
-      for i in range(NUMBEROFBOTTONS):
-        if not botan_data[i] == botan_data_old[i]:
-          con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
-          botan_data_old = copy.deepcopy(botan_data)
-    except Exception as e :
-      print(f"Error in controller_loop: {e}")
-      break
 
 
 def switch_camera(current_camera_var, canvas1, canvas2):
@@ -250,22 +187,63 @@ def main():
   thread1 = threading.Thread(target=update_loop, args=(
       client1, canvas2, photo_var2, zoom_factor, zoom_lock))
 
-  # コントローラーの更新ループを実行するスレッドを開始
-  controller_thread = threading.Thread(target=controller_loop,args=(None,None,j,SERVER_IP,SERVER_PORT_CONTROLLER))
-
   thread0.daemon = True
   thread1.daemon = True
-  controller_thread.daemon = True
-  
+
   thread0.start()
   print("スレッド開始: カメラ1")
   thread1.start()
   print("スレッド開始: カメラ2")
-  controller_thread.start()
-  print("スレッド開始: コントローラー")
 
-  # メインのTkinterイベントループを開始
-  window.mainloop()
+  # コントローラーの更新ループを実行するスレッドを開始
+  hat_data = [0] * 2
+  botan_data = [0] * 10
+  Lstick_data = [0] * 2
+  Rstick_data = [0] * 2
+  hat_data_old = [0] * 2
+  botan_data_old = [0] * 10
+  Lstick_data_old = [0] * 2
+  Rstick_data_old = [0] * 2
+
+  sv = socket.socket(socket.AF_INET)
+  sv.bind((socket.gethostbyname(socket.gethostname()), SERVER_PORT_CONTROLLER))
+  sv.listen()
+  port = 36133
+
+ # **Tkinterのイベントループとコントローラー入力の送信を並行実行**
+  while True:
+    # Tkinterのウィンドウを更新
+    window.update_idletasks()
+    window.update()
+
+    # コントローラー入力の取得
+    Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
+    Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
+    hat_data = copy.deepcopy(con.gethat(sv, port, j))
+    events = pygame.event.get()
+    for event in events:
+      if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
+        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+      if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
+        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+    if not hat_data == hat_data_old:
+      con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
+      con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
+      hat_data_old = copy.deepcopy(hat_data)
+    if not Lstick_data == Lstick_data_old:
+      con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
+      con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
+      Lstick_data_old = copy.deepcopy(Lstick_data)
+    if not Rstick_data == Rstick_data_old:
+      con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
+      con.contorollerdata_send(
+          cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
+      Rstick_data_old = copy.deepcopy(Rstick_data)
+    for i in range(NUMBEROFBOTTONS):
+      if not botan_data[i] == botan_data_old[i]:
+        con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
+        botan_data_old = copy.deepcopy(botan_data)
+
 
 # スクリプトとして実行された場合に main() を呼び出す
 if __name__ == "__main__":

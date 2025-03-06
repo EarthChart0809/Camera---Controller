@@ -13,7 +13,7 @@ SERVER_PORT = 36131
 SERVER_PORT_CONTROLLER = 36132
 SERVER_PORT_SERIAL = 36133
 BUFSIZE = 4096
-data_get: list[Future] = []   # 型をFutureに変更
+data_get: list[Future] = [0]*4   # 型をFutureに変更
 data_return = []
 
 # シリアルポートの初期化
@@ -96,39 +96,6 @@ def capture_camera(camera_index, client_socket):
     finally:
         cap.release()
 
-def command_listener():
-  sv = socket.socket(socket.AF_INET)
-  sv.bind((SERVER_IP, SERVER_PORT_SERIAL))
-  sv.listen()
-  print(f"コントローラーデータ受信中... ポート: {SERVER_PORT_CONTROLLER}")
-
-  with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
-      while True:
-          try:
-                client, addr = sv.accept()
-                print(f"Accepted connection from {addr}")
-
-                # 別スレッドでクライアントに返答
-                future = executor.submit(
-                    responseToCommand, client, addr, SERVER_PORT_CONTROLLER)
-                data_get.append(future)  # 配列の使い方を統一
-                data_return.append(future.result())
-
-                print("Received:", data_return)
-
-                serialtusin(data_return[-1], ser)
-
-                if not data_return[-1][:1] in ["0", "1"]:
-                    data_return.pop(-1)
-                elif len(data_return) > 10:
-                    data_return.pop(0)
-
-                z += 1
-                if z > 3:
-                    z = 0
-
-          except Exception as e:
-                print(f"Error in command_listener: {e}")
 def main():
 
   # メイン処理
@@ -138,35 +105,57 @@ def main():
 
   print("Waiting for connection...")
 
-  try:
-    client_socket0, client_address1 = server.accept()
-    print(f"Connection from: {client_address1} for Camera 0")
+  sv = socket.socket(socket.AF_INET)
+  sv.bind((SERVER_IP, SERVER_PORT_SERIAL))
+  sv.listen()
+  print(f"コントローラーデータ受信中... ポート: {SERVER_PORT_SERIAL}")
 
-    client_socket1, client_address2 = server.accept()
-    print(f"Connection from: {client_address2} for Camera 1")
 
-    # カメラ処理を別スレッドで実行
-    thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
-    thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+  
+  client_socket0, client_address1 = server.accept()
+  print(f"Connection from: {client_address1} for Camera 0")
 
-    #コントローラー処理を別スレッドで実行
-    thread2 = threading.Thread(target=command_listener)
+  client_socket1, client_address2 = server.accept()
+  print(f"Connection from: {client_address2} for Camera 1")
 
-    thread0.start()
-    thread1.start()
-    thread2.start()
+  # カメラ処理を別スレッドで実行
+  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
+  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
 
-    thread0.join()
-    thread1.join()
-    thread2.join()
+  thread0.start()
+  thread1.start()
 
-  except KeyboardInterrupt:
-    print("Shutting down server.")
+  with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
+      while True:
+          try:
+              # **タイムアウトを使い、データが来ない場合は処理をスキップ**
+              try:
+                    client, addr = sv.accept()
+              except socket.timeout:
+                    continue  # **タイムアウトしたらループを継続**
 
-  finally:
-    client_socket0.close()
-    client_socket1.close()
-    server.close()
+              print(f"Accepted connection from {addr}")
+              # 別スレッドでクライアントに返答
+              future = executor.submit(
+                  responseToCommand, client, addr, SERVER_PORT_CONTROLLER)
+              data_get.append(future)  # 配列の使い方を統一
+              data_return.append(future.result())
+
+              print("Received:", data_return)
+
+              serialtusin(data_return[-1], ser)
+
+              if not data_return[-1][:1] in ["0", "1"]:
+                    data_return.pop(-1)
+              elif len(data_return) > 10:
+                    data_return.pop(0)
+
+              z += 1
+              if z > 3:
+                    z = 0
+
+          except Exception as e:
+              print(f"Error in command_listener: {e}")
 
 if __name__ =='__main__':
   main()
