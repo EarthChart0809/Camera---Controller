@@ -1,17 +1,11 @@
 import socket
 import tkinter
 from tkinter import Button
-import numpy as np
-import PIL.Image
-import PIL.ImageTk
-import cv2
 import threading
-import struct
-from pyzbar.pyzbar import decode, ZBarSymbol
 import pygame
 import controller_get as con
 import copy
-import time
+from camera_manager import CameraManager
 
 NUMBEROFBOTTONS = 10
 NUMBEROFSTICKS = 6
@@ -47,96 +41,40 @@ def portcheck(bunsho):
       continue
     return p
 
-# デジタルズーム関数
-def digital_zoom(frame, zoom_factor):
-    height, width = frame.shape[:2]
-    new_width = int(width / zoom_factor)
-    new_height = int(height / zoom_factor)
+def switch_camera(event, current_camera_var, canvas_list, zoom_factor, zoom_lock):
+    """カメラの表示モードを切り替える + ズーム機能の調整"""
 
-    start_x = (width - new_width) // 2
-    start_y = (height - new_height) // 2
+    if event.keysym == 'a':  # 全カメラ表示モード
+        current_camera_var[0] = 0  # 0は「全カメラ表示」
+        for canvas in canvas_list:
+            canvas.pack(side="left")  # すべてのカメラを表示
+        print("Switched to All Camera Mode")
 
-    cropped_frame = frame[start_y:start_y +
-                          new_height, start_x:start_x + new_width]
-    zoomed_frame = cv2.resize(cropped_frame, (width, height))
+    elif event.keysym in ['1', '2']:  # 個別カメラ表示モード
+        current_camera_var[0] = int(event.keysym)  # 1, 2, 3 のどれが押されたか取得
+        for i, canvas in enumerate(canvas_list):
+            if i + 1 == current_camera_var[0]:  # 選ばれたカメラだけ表示
+                canvas.pack(side="left", expand=True, fill="both")
+            else:
+                canvas.pack_forget()
+        print(f"Switched to Camera {current_camera_var[0]} Mode")
 
-    return zoomed_frame
+    elif event.keysym == 'plus':  # ズームイン（+キー）
+        with zoom_lock:
+            zoom_factor[0] = min(zoom_factor[0] + 1, 5)  # 最大5倍まで
+        print(f"Zoom In: {zoom_factor[0]}x")
 
-# QRコードを取得する関数
-def get_qr_text(frame: np.ndarray):
-    value = decode(frame, symbols=[ZBarSymbol.QRCODE])
-    return '\n'.join(list(map(lambda code: code.data.decode('utf-8'), value)))
+    elif event.keysym == 'minus':  # ズームアウト（-キー）
+        with zoom_lock:
+            zoom_factor[0] = max(zoom_factor[0] - 1, 1)  # 最小1倍まで
+        print(f"Zoom Out: {zoom_factor[0]}x")
 
-# 各カメラのフレームを表示する関数
-def update_image(data, canvas, photo_var, zoom_factor, zoom_lock):
-    img = np.frombuffer(data, dtype=np.uint8)
-    img = cv2.imdecode(img, 1)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-    # ズーム倍率をロックして取得
-    with zoom_lock:
-        zoomed_img = digital_zoom(img, zoom_factor[0])
-
-    qr_text = get_qr_text(zoomed_img)
-    if qr_text:
-        print(f"QRコードが検出されました: {qr_text}")
-
-    photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(zoomed_img))
-    canvas.create_image(0, 0, image=photo, anchor=tkinter.NW)
-    photo_var[0] = photo  # メモリ上で画像を保持するために参照を保存
-
-# 各カメラの更新ループを実行する関数
-def update_loop(client, canvas, photo_var, zoom_factor, zoom_lock):
-    data = b""
-    print("カメラの受信ループ開始")
-    while True:
-        try:
-            while len(data) < 4:
-                packet = client.recv(4096)
-                if not packet:
-                    return
-                data += packet
-            data_size = struct.unpack(">L", data[:4])[0]
-            data = data[4:]
-
-            # print(f"受信データサイズ: {data_size} バイト")
-
-            while len(data) < data_size:
-                packet = client.recv(4096)
-                if not packet:
-                    return
-                data += packet
-
-            img_data = data[:data_size]
-            data = data[data_size:]
-            # print(f"画像データを受信: {len(img_data)} バイト")
-            update_image(img_data, canvas, photo_var, zoom_factor, zoom_lock)
-        except Exception as e:
-            print(f"Error in update_loop: {e}")
-            break
-
-
-def switch_camera(current_camera_var, canvas1, canvas2):
-    if current_camera_var[0] == 1:
-        current_camera_var[0] = 2
-        canvas1.pack_forget()  # 現在のカメラを隠す
-        canvas2.pack(side="left")  # 2番目のカメラを表示
-        print("Switched to Camera 2")
-    else:
-        current_camera_var[0] = 1
-        canvas2.pack_forget()  # 現在のカメラを隠す
-        canvas1.pack(side="left")  # 1番目のカメラを表示
-        print("Switched to Camera 1")
-
-def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window):
+def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas_list, window):
     if event.keysym == 'q':
         window.quit()
-    elif event.char.isdigit():  # 数字キーが押された場合
-        with zoom_lock:  # ズーム倍率をロックして更新
-            zoom_factor[0] = int(event.char)
-        print(f"Zoom set to: {zoom_factor[0]}")
-    elif event.keysym == 'c':  # 'c'キーでカメラを切り替える
-        switch_camera(current_camera_var, canvas1, canvas2)
+    elif event.keysym in ['1', '2', '3', 'a', 'plus', 'minus']:
+        switch_camera(event, current_camera_var,
+                      canvas_list, zoom_factor, zoom_lock)
 
 def main():
   # メインウィンドウの作成
@@ -159,16 +97,20 @@ def main():
   photo_var1 = [None]
   photo_var2 = [None]
 
+  # キャンバスリストを作成
+  canvas_list = [canvas1, canvas2]
+
   # ズーム倍率を保持する変数とロック
   zoom_factor = [1]  # リストでズーム倍率を保持
   zoom_lock = threading.Lock()
 
   # 現在表示しているカメラを保持する変数
-  current_camera_var = [1]  # 初期状態ではカメラ1
+  current_camera_var = [0]  # 初期状態ではカメラ1
 
   SERVER_IP = "10.133.7.48"  # ★ラズパイのIPアドレスを指定してください
   SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
   SERVER_PORT_CONTROLLER = 36132        # ★ラズパイのサーバーポートを指定してください
+  port = 36133               # ★コントローラーのサーバーポートを指定してください
 
   # ソケット接続の確立
   client0 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -179,12 +121,19 @@ def main():
 
   # qキーでプログラムを終了するためのイベントバインド
   window.bind('<KeyPress>', lambda event: on_key_press(
-      event, zoom_factor, zoom_lock, current_camera_var, canvas1, canvas2, window))
+      event, zoom_factor, zoom_lock, current_camera_var, canvas_list, window))
+
+  # キーボード入力のバインド
+  window.bind('<KeyPress>', lambda event: switch_camera(
+      event, current_camera_var, canvas_list,zoom_factor, zoom_lock))
+
+  camera1 = CameraManager(SERVER_IP, SERVER_PORT, canvas1)
+  camera2 = CameraManager(SERVER_IP, SERVER_PORT, canvas2)
 
   # フレームの更新ループを実行するスレッドを開始（それぞれのカメラ用）
-  thread0 = threading.Thread(target=update_loop, args=(
+  thread0 = threading.Thread(target=camera1.update_loop, args=(
       client0, canvas1, photo_var1, zoom_factor, zoom_lock))
-  thread1 = threading.Thread(target=update_loop, args=(
+  thread1 = threading.Thread(target=camera2.update_loop, args=(
       client1, canvas2, photo_var2, zoom_factor, zoom_lock))
 
   thread0.daemon = True
@@ -208,7 +157,6 @@ def main():
   sv = socket.socket(socket.AF_INET)
   sv.bind((socket.gethostbyname(socket.gethostname()), SERVER_PORT_CONTROLLER))
   sv.listen()
-  port = 36133
 
  # **Tkinterのイベントループとコントローラー入力の送信を並行実行**
   while True:
