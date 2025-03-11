@@ -7,6 +7,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
+from multiprocessing import Process
 
 SERVER_IP = '10.133.7.48'
 SERVER_PORT = 36131
@@ -76,7 +77,9 @@ def capture_camera(camera_index, client_socket):
                     time.sleep(0.05)
                     continue
 
-                _, img_encoded = cv2.imencode('.jpg', frame)
+                # 画質を 80 に調整（デフォルトは 95-100）
+                _, img_encoded = cv2.imencode(
+                '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 data = img_encoded.tobytes()
 
                 # フレームサイズを送信
@@ -119,11 +122,11 @@ def main():
   print(f"Connection from: {client_address2} for Camera 1")
 
   # カメラ処理を別スレッドで実行
-  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
-  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+  p0 = Process(target=capture_camera, args=(0, client_socket0))
+  p1 = Process(target=capture_camera, args=(2, client_socket1))
 
-  thread0.start()
-  thread1.start()
+  p0.start()
+  p1.start()
 
   with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
       while True:
