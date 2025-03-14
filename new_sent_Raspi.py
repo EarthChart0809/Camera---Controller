@@ -139,24 +139,25 @@ def main():
 
               print(f"Accepted connection from {addr}")
               # 別スレッドでクライアントに返答
-              future = executor.submit(
+              data_get[z] = executor.submit(
                   responseToCommand, client, addr, SERVER_PORT_CONTROLLER)
-              data_get.append(future)  # 配列の使い方を統一
-              data_return.append(future.result())
+              data_return.append(data_get[z].result())
 
-              print("Received:", data_return)
-
+#       try:
+              print(data_return)
               serialtusin(data_return[-1], ser)
 
-              if not data_return[-1][:1] in ["0", "1"]:
-                    data_return.pop(-1)
-              elif len(data_return) > 10:
-                    data_return.pop(0)
+              if (not data_return[-1][:1] == "0" and not data_return[-1][:1] == "1"):
+                data_return.pop(-1)
+              elif (len(data_return) > 10):
+                data_return.pop(0)
+#       except:
+#            print("error")
 
               z += 1
               if z > 3:
-                    z = 0
-
+                z = 0
+  
           except Exception as e:
               print(f"Error in command_listener: {e}")
 
