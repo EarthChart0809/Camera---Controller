@@ -60,9 +60,13 @@ def capture_camera(camera_index, client_socket):
     cap = cv2.VideoCapture(camera_index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # **バッファを小さく**
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # 手動露出
-    cap.set(cv2.CAP_PROP_EXPOSURE, -6)  # 露出調整
-    cap.set(cv2.CAP_PROP_FPS, 15)  # フレームレート設定
+    cap.set(cv2.CAP_PROP_EXPOSURE, -5)  # 露出調整
+    cap.set(cv2.CAP_PROP_FPS, 30)  # フレームレート設定
+
+    # **TCP_NODELAYで遅延を減らす**
+    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     if not cap.isOpened():
         print(f"Error: Could not open camera {camera_index}.")
@@ -76,7 +80,9 @@ def capture_camera(camera_index, client_socket):
                         f"Error: Failed to capture image from camera {camera_index}.")
                     time.sleep(0.05)
                     continue
-
+                
+                # **JPEG圧縮率の最適化**
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]  # **圧縮率50**
                 # 画質を 80 に調整（デフォルトは 95-100）
                 _, img_encoded = cv2.imencode(
                 '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -122,8 +128,8 @@ def main():
   print(f"Connection from: {client_address2} for Camera 1")
 
   # カメラ処理を別スレッドで実行
-  p0 = Process(target=capture_camera, args=(0, client_socket0))
-  p1 = Process(target=capture_camera, args=(2, client_socket1))
+  p0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
+  p1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
 
   p0.start()
   p1.start()

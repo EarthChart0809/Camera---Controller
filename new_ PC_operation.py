@@ -185,7 +185,7 @@ def main():
   camera2 = CameraManager(SERVER_IP, SERVER_PORT, canvas2)
 
   # **スレッドプールの作成**
-  with ThreadPoolExecutor(max_workers=3) as executor:
+  with ThreadPoolExecutor(max_workers=6) as executor:
       # カメラデータ受信スレッド
       executor.submit(camera1.update_loop, client0, canvas1,photo_var1,zoom_factor, zoom_lock)
       executor.submit(camera2.update_loop, client1, canvas2,photo_var2,zoom_factor, zoom_lock)

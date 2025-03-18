@@ -80,8 +80,10 @@ class CameraManager:
 
             img_data = data[:data_size]
             data = data[data_size:]
-            # print(f"画像データを受信: {len(img_data)} バイト")
-            self.update_image(img_data, canvas, photo_var, zoom_factor, zoom_lock)
+            
+            # **デコード処理をスレッド化**
+            threading.Thread(target=self.update_image, args=(
+                img_data, canvas, photo_var, zoom_factor, zoom_lock, window)).start()
         except Exception as e:
             print(f"Error in update_loop: {e}")
             break
