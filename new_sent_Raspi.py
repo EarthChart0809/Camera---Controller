@@ -1,3 +1,4 @@
+import queue
 import socket
 import cv2
 import numpy as np
@@ -54,55 +55,73 @@ def responseToCommand(client, addr, SERVER_PORT_CONTROLLER):
         print(f"Error handling command: {e}")
         return "ERROR"
 
-# カメラ処理
-def capture_camera(camera_index, client_socket):
-    cap = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # **バッファを小さく**
-    cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # 手動露出
-    cap.set(cv2.CAP_PROP_EXPOSURE, -5)  # 露出調整
-    cap.set(cv2.CAP_PROP_FPS, 30)  # フレームレート設定
 
-    # **TCP_NODELAYで遅延を減らす**
-    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+# キューを作成（エンコード待ちの画像フレームを格納）
+frame_queue = queue.Queue(maxsize=5)  # キューのサイズを適切に設定
+
+def encode_and_send(client_socket, frame_queue):
+    """画像をエンコードして送信（別スレッドで処理）"""
+    while True:
+        try:
+            frame = frame_queue.get()  # キューからフレームを取得
+            if frame is None:
+                break  # Noneを受け取ったらスレッド終了
+
+            # **JPEG にエンコード（圧縮率を調整）**
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY),
+                            50]  # 画質 50 に設定（40 から微調整）
+            _, img_encoded = cv2.imencode('.jpg', frame, encode_param)
+            data = img_encoded.tobytes()
+
+            # **フレームサイズを送信**
+            data_size = struct.pack(">L", len(data))
+            client_socket.sendall(data_size)
+            client_socket.sendall(data)
+
+        except Exception as e:
+            print(f"Error in encode_and_send: {e}")
+            break
+
+def capture_camera(camera_index, client_socket):
+    """カメラキャプチャ（メインスレッドで処理）"""
+    cap = cv2.VideoCapture(camera_index)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)   # 解像度を下げて軽量化
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # バッファを小さくして遅延を減らす
+    cap.set(cv2.CAP_PROP_FPS, 15)  # FPSを下げてCPU負荷を軽減
 
     if not cap.isOpened():
         print(f"Error: Could not open camera {camera_index}.")
         return
 
+    # **カメラごとのフレームキューを作成**
+    frame_queue = queue.Queue(maxsize=5)
+
+    # **エンコード専用スレッドを開始**
+    encode_thread = threading.Thread(
+        target=encode_and_send, args=(client_socket, frame_queue), daemon=True)
+    encode_thread.start()
+
     try:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    print(
-                        f"Error: Failed to capture image from camera {camera_index}.")
-                    time.sleep(0.05)
-                    continue
-                
-                # **JPEG圧縮率の最適化**
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]  # **圧縮率50**
-                # 画質を 80 に調整（デフォルトは 95-100）
-                _, img_encoded = cv2.imencode(
-                '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                data = img_encoded.tobytes()
-
-                # フレームサイズを送信
-                data_size = struct.pack(">L", len(data))
-                try:
-                    client_socket.sendall(data_size)
-                    client_socket.sendall(data)
-                except Exception as e:
-                    print(f"Error sending frame: {e}")
-                    break  # 接続エラー時はループを抜ける
-
-                # フレームレートの維持
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print(
+                    f"Error: Failed to capture image from camera {camera_index}.")
                 time.sleep(0.05)
+                continue
+
+            # **フレームをキューに追加（エンコードスレッドが処理）**
+            if not frame_queue.full():  # キューが満杯ならスキップして最新フレームを優先
+                frame_queue.put(frame)
 
     except Exception as e:
-        print(f"Error in camera {camera_index}: {e}")
+        print(f"Error in capture_camera {camera_index}: {e}")
     finally:
         cap.release()
+        frame_queue.put(None)  # エンコードスレッドを終了させる
+        encode_thread.join()   # スレッドの終了を待つ
+
 
 def main():
 
