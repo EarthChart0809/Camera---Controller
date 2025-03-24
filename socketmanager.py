@@ -1,16 +1,27 @@
 # socketmanager.py
 import threading
+import socket
 
 # サーバーからの戻り値を待ち受けるスレッドメソッド
 #  sv      : listen済のサーバーソケットオブジェクト(socket)
 #  callback: サーバーからの戻り値文字列を処理するコールバック関数
 def receiveReturn(sv, callback):
-  res, addr = sv.accept()   # 受信待ち
+  sv.settimeout(1.0)  # タイムアウトを5秒に設定（調整可能）
+  
+  try:
+        res, addr = sv.accept()   # 受信待ち
+        print(f"接続受理: {addr}")
 
-  # 返答をコールバックに返す
-  data = res.recv(1024)
-  str = data.decode("utf-8")
-  callback(str)
+        # 返答をコールバックに返す
+        data = res.recv(1024)
+        str = data.decode("utf-8")
+        callback(str)
+
+  except socket.timeout:
+        print("Warning: sv.accept() timed out. Retrying...")
+        return  # タイムアウトしたらそのまま戻る
+  except Exception as e:
+        print(f"Error in receiveReturn: {e}")
 
 
 # コマンドを送信して返答をコールバックする

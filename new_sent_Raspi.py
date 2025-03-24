@@ -7,7 +7,6 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
-from multiprocessing import Process
 
 SERVER_IP = '10.133.7.48'
 SERVER_PORT = 36131
@@ -117,33 +116,33 @@ def main():
   sv = socket.socket(socket.AF_INET)
   sv.bind((SERVER_IP, SERVER_PORT_SERIAL))
   sv.listen()
+  sv.settimeout(1.0)  # **タイムアウトを 1 秒に**
+
   print(f"コントローラーデータ受信中... ポート: {SERVER_PORT_SERIAL}")
-
-
   
-  client_socket0, client_address1 = server.accept()
-  print(f"Connection from: {client_address1} for Camera 0")
+  client_socket1, client_address1 = server.accept()
+  print(f"Connection from: {client_address1} for Camera 1")
 
-  client_socket1, client_address2 = server.accept()
-  print(f"Connection from: {client_address2} for Camera 1")
+  client_socket2, client_address2 = server.accept()
+  print(f"Connection from: {client_address2} for Camera 2")
 
   # カメラ処理を別スレッドで実行
-  p0 = threading.Thread(target=capture_camera, args=(0, client_socket0))
-  p1 = threading.Thread(target=capture_camera, args=(2, client_socket1))
+  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket1))
+  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket2))
 
-  p0.start()
-  p1.start()
+  thread0.start()
+  thread1.start()
 
-  with ThreadPoolExecutor(max_workers=4) as executor:  # ループ外でExecutorを作成
+  with ThreadPoolExecutor(max_workers=2) as executor:  # ループ外でExecutorを作成
       while True:
           try:
               # **タイムアウトを使い、データが来ない場合は処理をスキップ**
               try:
                     client, addr = sv.accept()
+                    print(f"Accepted connection from {addr}")
               except socket.timeout:
                     continue  # **タイムアウトしたらループを継続**
 
-              print(f"Accepted connection from {addr}")
               # 別スレッドでクライアントに返答
               data_get[z] = executor.submit(
                   responseToCommand, client, addr, SERVER_PORT_CONTROLLER)

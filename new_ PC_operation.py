@@ -67,7 +67,7 @@ def on_key_press(event, zoom_factor, zoom_lock, current_camera_var, canvas_list,
     if event.keysym == 'q':
         window.quit()
 
-    elif event.keysym in ['1', '2', '3', 'a']:
+    elif event.keysym in ['1', '2', 'a']:
         current_camera_var = switch_camera(
             event, current_camera_var, canvas_list)
 
@@ -103,37 +103,52 @@ def controller_loop():
   sv = socket.socket(socket.AF_INET)
   sv.bind((socket.gethostbyname(socket.gethostname()), SERVER_PORT_CONTROLLER))
   sv.listen()
+  sv.settimeout(0.1)  # **ソケットをノンブロッキングに**
 
- # **Tkinterのイベントループとコントローラー入力の送信を並行実行**
-  while True:
+  with ThreadPoolExecutor(max_workers=4) as executor:  # **並列送信**
 
-    # コントローラー入力の取得
-    Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
-    Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
-    hat_data = copy.deepcopy(con.gethat(sv, port, j))
-    events = pygame.event.get()
-    for event in events:
-      if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-      if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
-        botan_data = copy.deepcopy(con.getbotan(sv, port, j))
-    if not hat_data == hat_data_old:
-      con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
-      con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
-      hat_data_old = copy.deepcopy(hat_data)
-    if not Lstick_data == Lstick_data_old:
-      con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
-      con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
-      Lstick_data_old = copy.deepcopy(Lstick_data)
-    if not Rstick_data == Rstick_data_old:
-      con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
-      con.contorollerdata_send(
-          cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
-      Rstick_data_old = copy.deepcopy(Rstick_data)
-    for i in range(NUMBEROFBOTTONS):
-      if not botan_data[i] == botan_data_old[i]:
-        con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
-        botan_data_old = copy.deepcopy(botan_data)
+  # **Tkinterのイベントループとコントローラー入力の送信を並行実行**
+    while True:
+      try:
+            try:
+                    client, addr = sv.accept()
+            except socket.timeout:
+                    client = None
+
+            if client:
+                    print(f"接続受理: {addr}")
+
+      # コントローラー入力の取得
+            Rstick_data = copy.deepcopy(con.getstick(3, 2, sv, port, j))
+            Lstick_data = copy.deepcopy(con.getstick(0, 1, sv, port, j))
+            hat_data = copy.deepcopy(con.gethat(sv, port, j))
+            events = pygame.event.get()
+            for event in events:
+              if event.type == pygame.JOYBUTTONDOWN:  # ボタンが押された場合
+                botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+              if event.type == pygame.JOYBUTTONUP:  # ボタンが押された場合
+                botan_data = copy.deepcopy(con.getbotan(sv, port, j))
+            
+            if not hat_data == hat_data_old:
+              con.contorollerdata_send(hat_data[WIDTH], VARTICAL, H, sv, port)
+              con.contorollerdata_send(hat_data[VARTICAL], VARTICAL, H, sv, port)
+              hat_data_old = copy.deepcopy(hat_data)
+            if not Lstick_data == Lstick_data_old:
+              con.contorollerdata_send(Lstick_data[WIDTH], WIDTH, L, sv, port)
+              con.contorollerdata_send(Lstick_data[VARTICAL], VARTICAL, L, sv, port)
+              Lstick_data_old = copy.deepcopy(Lstick_data)
+            if not Rstick_data == Rstick_data_old:
+              con.contorollerdata_send(Rstick_data[WIDTH], WIDTH, R, sv, port)
+              con.contorollerdata_send(
+              cmd=Rstick_data[VARTICAL], sendc=VARTICAL, kind=R, sv=sv, port=port)
+              Rstick_data_old = copy.deepcopy(Rstick_data)
+            for i in range(NUMBEROFBOTTONS):
+              if not botan_data[i] == botan_data_old[i]:
+                con.contorollerdata_send(botan_data[i], i, BOTAN, sv, port)
+                botan_data_old = copy.deepcopy(botan_data)
+
+      except Exception as e:
+        print(f"Error: {e}")
 
 
 def main():
@@ -146,7 +161,7 @@ def main():
   canvas1.pack(side="left")
 
   canvas2 = tkinter.Canvas(window, width=640, height=480)
-  canvas2.pack_forget()  # 初期状態では2番目のカメラを非表示にする
+  canvas2.place_forget()  # 初期状態では2番目のカメラを非表示にする
 
   # ジョイスティックの初期化
   pygame.init()
@@ -171,24 +186,25 @@ def main():
   SERVER_PORT = 36131        # ★ラズパイのサーバーポートを指定してください
 
   # ソケット接続の確立
-  client0 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  client0.connect((SERVER_IP, SERVER_PORT))
-
   client1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   client1.connect((SERVER_IP, SERVER_PORT))
+
+  client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client2.connect((SERVER_IP, SERVER_PORT))
 
   # qキーでプログラムを終了するためのイベントバインド
   window.bind('<KeyPress>', lambda event: on_key_press(
       event, zoom_factor, zoom_lock, current_camera_var, canvas_list, window))
 
-  camera1 = CameraManager(SERVER_IP, SERVER_PORT, canvas1)
-  camera2 = CameraManager(SERVER_IP, SERVER_PORT, canvas2)
+  camera1 = CameraManager(SERVER_IP, SERVER_PORT, canvas1,window)
+  camera2 = CameraManager(SERVER_IP, SERVER_PORT, canvas2,window)
+
 
   # **スレッドプールの作成**
   with ThreadPoolExecutor(max_workers=6) as executor:
       # カメラデータ受信スレッド
-      executor.submit(camera1.update_loop, client0, canvas1,photo_var1,zoom_factor, zoom_lock)
-      executor.submit(camera2.update_loop, client1, canvas2,photo_var2,zoom_factor, zoom_lock)
+      executor.submit(camera1.update_loop, client1, canvas1,photo_var1,zoom_factor, zoom_lock)
+      executor.submit(camera2.update_loop, client2, canvas2,photo_var2,zoom_factor, zoom_lock)
 
       # コントローラーの入力処理
       executor.submit(controller_loop)
