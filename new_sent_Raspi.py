@@ -68,8 +68,7 @@ def encode_and_send(client_socket, frame_queue):
                 break  # Noneを受け取ったらスレッド終了
 
             # **JPEG にエンコード（圧縮率を調整）**
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY),
-                            50]  # 画質 50 に設定（40 から微調整）
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY),50]  # 画質 50 に設定（40 から微調整）
             _, img_encoded = cv2.imencode('.jpg', frame, encode_param)
             data = img_encoded.tobytes()
 
@@ -82,7 +81,7 @@ def encode_and_send(client_socket, frame_queue):
             print(f"Error in encode_and_send: {e}")
             break
 
-def capture_camera(camera_index, client_socket):
+def capture_camera(camera_index,frame_queue,client_socket):
     """カメラキャプチャ（メインスレッドで処理）"""
     cap = cv2.VideoCapture(camera_index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)   # 解像度を下げて軽量化
@@ -90,17 +89,15 @@ def capture_camera(camera_index, client_socket):
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # バッファを小さくして遅延を減らす
     cap.set(cv2.CAP_PROP_FPS, 15)  # FPSを下げてCPU負荷を軽減
 
+    # # **TCP通信の最適化**
+    # client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 即時送信
+    # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)  # 送信バッファサイズを小さく
+    # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)  # 受信バッファサイズを小さく
+    # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)  # KeepAliveを有効化
+
     if not cap.isOpened():
         print(f"Error: Could not open camera {camera_index}.")
         return
-
-    # **カメラごとのフレームキューを作成**
-    frame_queue = queue.Queue(maxsize=5)
-
-    # **エンコード専用スレッドを開始**
-    encode_thread = threading.Thread(
-        target=encode_and_send, args=(client_socket, frame_queue), daemon=True)
-    encode_thread.start()
 
     try:
         while True:
@@ -120,7 +117,6 @@ def capture_camera(camera_index, client_socket):
     finally:
         cap.release()
         frame_queue.put(None)  # エンコードスレッドを終了させる
-        encode_thread.join()   # スレッドの終了を待つ
 
 
 def main():
@@ -145,12 +141,23 @@ def main():
   client_socket2, client_address2 = server.accept()
   print(f"Connection from: {client_address2} for Camera 2")
 
-  # カメラ処理を別スレッドで実行
-  thread0 = threading.Thread(target=capture_camera, args=(0, client_socket1))
-  thread1 = threading.Thread(target=capture_camera, args=(2, client_socket2))
+  # **カメラごとのフレームキューを作成**
+  frame_queue1 = queue.Queue(maxsize=5)
+  frame_queue2 = queue.Queue(maxsize=5)
 
-  thread0.start()
+  # **エンコード専用スレッドを開始**
+  encode_thread1 = threading.Thread(target=encode_and_send, args=(client_socket1, frame_queue1), daemon=True)
+  encode_thread2 = threading.Thread(target=encode_and_send, args=(client_socket2, frame_queue2), daemon=True)
+
+  encode_thread1.start()
+  encode_thread2.start()
+
+  # カメラ処理を別スレッドで実行
+  thread1 = threading.Thread(target=capture_camera, args=(0, frame_queue1))
+  thread2 = threading.Thread(target=capture_camera, args=(2, frame_queue2))
+
   thread1.start()
+  thread2.start()
 
   with ThreadPoolExecutor(max_workers=2) as executor:  # ループ外でExecutorを作成
       while True:
