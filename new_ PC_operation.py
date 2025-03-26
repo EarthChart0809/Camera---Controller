@@ -201,7 +201,7 @@ def main():
 
 
   # **スレッドプールの作成**
-  with ThreadPoolExecutor(max_workers=6) as executor:
+  with ThreadPoolExecutor(max_workers=7) as executor:
       # カメラデータ受信スレッド
       executor.submit(camera1.update_loop, client1, canvas1,photo_var1,zoom_factor, zoom_lock)
       executor.submit(camera2.update_loop, client2, canvas2,photo_var2,zoom_factor, zoom_lock)
