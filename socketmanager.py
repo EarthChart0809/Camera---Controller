@@ -6,7 +6,7 @@ import socket
 #  sv      : listen済のサーバーソケットオブジェクト(socket)
 #  callback: サーバーからの戻り値文字列を処理するコールバック関数
 def receiveReturn(sv, callback):
-  sv.settimeout(100.0)  # タイムアウトを5秒に設定（調整可能）
+  sv.settimeout(1)  # タイムアウトを5秒に設定（調整可能）
   
   try:
         res, addr = sv.accept()   # 受信待ち

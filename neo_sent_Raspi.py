@@ -14,7 +14,9 @@ SERVER_PORT = 36131
 BUFSIZE = 4096
 socket.setdefaulttimeout(1000)
 
-# 繧ｭ繝･繝ｼ繧剃ｽ懈・・医お繝ｳ繧ｳ繝ｼ繝牙ｾ・■縺ｮ逕ｻ蜒上ヵ繝ｬ繝ｼ繝繧呈ｼ邏搾ｼ・frame_queue = queue.Queue(maxsize=5)  # 繧ｭ繝･繝ｼ縺ｮ繧ｵ繧､繧ｺ繧帝←蛻・↓險ｭ螳・
+# 繧ｭ繝･繝ｼ繧剃ｽ懈・・医お繝ｳ繧ｳ繝ｼ繝牙ｾ・■縺ｮ逕ｻ蜒上ヵ繝ｬ繝ｼ繝繧呈ｼ邏搾ｼ・
+frame_queue = queue.Queue(maxsize=5)  # 繧ｭ繝･繝ｼ縺ｮ繧ｵ繧､繧ｺ繧帝←蛻・↓險ｭ螳・
+
 def encode_and_send(client_socket, frame_queue):
     "逕ｻ蜒上ｒ繧ｨ繝ｳ繧ｳ繝ｼ繝峨＠縺ｦ騾∽ｿ｡・亥挨繧ｹ繝ｬ繝・ラ縺ｧ蜃ｦ逅・ｼ・"
     while True:
@@ -47,7 +49,8 @@ def capture_camera(camera_index,frame_queue):
     # # **TCP騾壻ｿ｡縺ｮ譛驕ｩ蛹・*
     # client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 蜊ｳ譎る∽ｿ｡
     # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)  # 騾∽ｿ｡繝舌ャ繝輔ぃ繧ｵ繧､繧ｺ繧貞ｰ上＆縺・    
-    # # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)  # 蜿嶺ｿ｡繝舌ャ繝輔ぃ繧ｵ繧､繧ｺ繧貞ｰ上＆縺・    # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)  # KeepAlive繧呈怏蜉ｹ蛹・
+    # # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)  # 蜿嶺ｿ｡繝舌ャ繝輔ぃ繧ｵ繧､繧ｺ繧貞ｰ上＆縺・    # 
+    # client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)  # KeepAlive繧呈怏蜉ｹ蛹・
     if not cap.isOpened():
         print(f"Error: Could not open camera {camera_index}.")
         return

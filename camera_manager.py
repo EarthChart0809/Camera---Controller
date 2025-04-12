@@ -7,6 +7,7 @@ import cv2
 import threading
 import struct
 from pyzbar.pyzbar import decode, ZBarSymbol
+import time
 
 class CameraManager:
   def __init__(self, server_ip, server_port, canvas,window):
@@ -18,6 +19,8 @@ class CameraManager:
         self.zoom_factor = [1]  # ズーム倍率をリストで管理
         self.zoom_lock = threading.Lock()
         self.client = None
+        self.last_qr_time = 0 # QRコード取得のためのタイムスタンプ
+        self.last_draw_time = 0  # 描画のためのタイムスタンプ
 
   # デジタルズーム関数
   def digital_zoom(self,frame, zoom_factor):
@@ -36,11 +39,20 @@ class CameraManager:
 
   # QRコードを取得する関数
   def get_qr_text(self,frame: np.ndarray):
+    now = time.time()
+    if now - self.last_qr_time < 5:  # 5秒間隔
+        return ""
+    self.last_qr_time = now
     value = decode(frame, symbols=[ZBarSymbol.QRCODE])
     return '\n'.join(list(map(lambda code: code.data.decode('utf-8'), value)))
 
   # 各カメラのフレームを表示する関数
   def update_image(self,data, canvas, photo_var, zoom_factor, zoom_lock):
+    now = time.time()
+    if now - self.last_draw_time < 0.033:  # 約30fps
+        return
+    self.last_draw_time = now
+    
     if not canvas.winfo_ismapped():  # キャンバスが表示されていない場合は処理しない
         return
     

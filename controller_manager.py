@@ -51,7 +51,7 @@ class conection:
                 except TimeoutError:
                   continue
                 except:
-                  print("縺ｪ繧薙°繧ｨ繝ｩ繝ｼ")
+                  print("接続エラー")
                 else:
                     break
               else:
@@ -59,10 +59,10 @@ class conection:
 
   def responseToCommand(self, client, addr):
     start = time.time()
-    # 蜃ｦ逅・ｼ壹さ繝ｳ繧ｽ繝ｼ繝ｫ縺ｫ繧ｨ繧ｳ繝ｼ縺吶ｋ
+    # クライアントからのデータを受信
     data = client.recv(1024)
     comand = data.decode("utf-8")
-    # 繧ｯ繝ｩ繧､繧｢繝ｳ繝医↓霑皮ｭ・    
+    # サーバーからの応答を送信
     res = socket.socket(socket.AF_INET)
     res.connect((addr[0], self.back_port))
     res.send("Thank you!".encode("utf-8"))
@@ -82,7 +82,7 @@ def conconection():
   while True:
     try:
         client, addr = cnc.sv.accept()
-      # 蛻･繧ｹ繝ｬ繝・ラ縺ｧ繧ｯ繝ｩ繧､繧｢繝ｳ繝医↓霑皮ｭ・        
+      # クライアントからのコマンドを処理
         with ThreadPoolExecutor(max_workers=4) as executor:
           cnc.data_get[z] = executor.submit(
             cnc.responseToCommand, client, addr)
@@ -104,7 +104,7 @@ def conconection():
           else:
                 z += 1
     except TimeoutError:
-      print("縺ｪ繧薙°繧ｨ繝ｩ繝ｼ蜃ｺ縺ｦ繧")
+      print("接続エラー: タイムアウト")
 
       cnc.backlog()
 #      continue
